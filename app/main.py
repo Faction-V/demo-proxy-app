@@ -24,15 +24,20 @@ class StoryPayload(BaseModel):
     story_plan_config_id: str
 
 # Helper function to add required headers
-def add_custom_headers():
-    return {
+def add_custom_headers(original_content_type=None):
+    headers = {
         "X-Domain": X_DOMAIN,
         "X-API-Key": X_API_KEY,
         "X-User-ID": USER_ID,
-        "Content-Type": "application/json",
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
+    
+    # Only add Content-Type if specified, allowing multipart and other types
+    if original_content_type:
+        headers["Content-Type"] = original_content_type
+    
+    return headers
 
 # POST endpoint for forwarding the specific payload
 @app.post("/forward-story")
@@ -71,8 +76,9 @@ async def catch_all(request: Request, path: str):
     except Exception as e:
         logging.error(f"Error reading body: {e}")
 
-    # Prepare the forwarding request
-    custom_headers = add_custom_headers()
+    # Get the original content type from the request
+    original_content_type = request.headers.get("Content-Type")
+    custom_headers = add_custom_headers(original_content_type)
     logging.info(f"****")
     logging.info(f"Headers: {dict(custom_headers)}")
 
