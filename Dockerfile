@@ -1,9 +1,9 @@
 FROM python:3.10
-COPY . ./
 WORKDIR /app
+COPY . /app
 
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies if required (e.g., requirements.txt)
+RUN pip install -r requirements.txt
 
-# Uvicorn will handle reloading when files change via the mounted volume
-EXPOSE 8000
+# Set the default command to run your application
+CMD ["python", "app.py"]
