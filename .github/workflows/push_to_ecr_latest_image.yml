@@ -31,4 +31,4 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
         run: |
           chmod +x ./bin/push_to_ecr.sh
-          ./bin/push_to_ecr.sh demo-proxy-app . demo-proxy-app latest-test
+          ./bin/push_to_ecr.sh demo-proxy-app . demo-proxy-app latest
