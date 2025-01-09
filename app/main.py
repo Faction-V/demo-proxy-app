@@ -4,6 +4,8 @@ from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel
 import httpx
 import json
+from datetime import datetime
+import uuid
 
 
 app = FastAPI()
@@ -69,16 +71,22 @@ async def forward_story(payload: StoryPayload):
 # Catch-all route that forwards any request (with method, params, and body)
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def catch_all(request: Request, path: str):
+
+    stack_id = str(uuid.uuid4())
     # Construct the full URL to forward the request
     forward_url = f"{FORWARD_URL}/api/{path}"
-
     # Extract query params
     query_params = request.url.query
+    client_ip = request.client.host if request.client else "Unknown"
 
     # Log the incoming request details for debugging
-    logging.info(f"Incoming request: {request.method} {request.url}")
-    logging.info(f"Headers: {dict(request.headers)}")
-    logging.info(f"Query params: {query_params}")
+    timestamp = datetime.now().isoformat()  # ISO 8601 timestamp
+    logging.info(f'Timestamp: {timestamp} Stack ID: {stack_id} Client IP: {client_ip} Forwarded URL: {forward_url}')
+    logging.info(f'Timestamp: {timestamp} Stack ID: {stack_id} Client IP: {client_ip} Incoming request: {request.method} {request.url}')
+    logging.info(f'Timestamp: {timestamp} Stack ID: {stack_id} Client IP: {client_ip} Headers: {dict(request.headers)}')
+    logging.info(f'Timestamp: {timestamp} Stack ID: {stack_id} Client IP: {client_ip} Query params: {query_params}')
+    
+
     try:
         body = await request.body()
         logging.info(f"Body: {body.decode('utf-8')}")
@@ -89,8 +97,8 @@ async def catch_all(request: Request, path: str):
     original_content_type = request.headers.get("Content-Type")
     custom_headers = add_custom_headers(original_content_type)
     logging.info(f"****")
-    logging.info(f"Headers: {dict(custom_headers)}")
-
+    logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Custom Headers: {dict(custom_headers)}")
+    
     async with httpx.AsyncClient() as client:
         response = await client.request(
             method=request.method,
@@ -100,11 +108,12 @@ async def catch_all(request: Request, path: str):
         )
 
     # Log the response for debugging
-    logging.info(f"Forwarded response status: {response.status_code}")
-    logging.info(f"Response content: {response.text}")
+    logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Forwarded response status: {response.status_code}")
+    logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Response content: {response.text}")
 
     # Return the response from the forwarded request, preserving the status code and headers
     # Return the response with JSON content and status code
+ 
     try:
         json_content = response.json()
         return Response(
