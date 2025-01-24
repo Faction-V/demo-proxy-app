@@ -40,7 +40,7 @@ def add_custom_headers(original_content_type=None):
         "X-API-Key": X_API_KEY,
         "X-User-ID": USER_ID,
         "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        # "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     }
     
     # Only add Content-Type if specified, allowing multipart and other types
@@ -55,7 +55,7 @@ def add_custom_headers(original_content_type=None):
 async def forward_story(payload: StoryPayload):
     headers = add_custom_headers()  # Add custom headers
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(
             url=FORWARD_URL,
             json=payload.dict(),  # Forward the request payload as JSON
@@ -99,7 +99,7 @@ async def catch_all(request: Request, path: str):
     logging.info(f"****")
     logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Custom Headers: {dict(custom_headers)}")
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.request(
             method=request.method,
             url=f"{forward_url}?{query_params}",
