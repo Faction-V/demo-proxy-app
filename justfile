@@ -154,8 +154,8 @@ start-vue:
     if [ ! -d node_modules ]; then npm install; fi && \
     npm run dev
 
-# Setup and start everything (backend + React frontend)
-start-all: start
+# Setup and start everything (all services + React frontend)
+start-all: start-services
     @sleep 2
     @just start-react
 
