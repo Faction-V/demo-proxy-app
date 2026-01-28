@@ -1,5 +1,27 @@
 # Demo Proxy App - Justfile
 
+# Service directories (relative to parent directory)
+_work_dir := parent_directory(justfile_directory())
+platform_api_dir := _work_dir + "/platform-api"
+clj_pg_wrapper_dir := _work_dir + "/clj-pg-wrapper"
+capitol_llm_dir := _work_dir + "/capitol-llm"
+demo_proxy_dir := justfile_directory()
+
+# Colors for output
+GREEN := '\033[0;32m'
+YELLOW := '\033[1;33m'
+BLUE := '\033[0;34m'
+NC := '\033[0m' # No Color
+
+# Helper function to run commands in other directories
+_dir_command dir command:
+    #!/usr/bin/env bash
+    if [ -d {{ dir }} ]; then
+        cd {{ dir }} && {{ command }}
+    else
+        echo "{{ dir }} directory does not exist, skipping"
+    fi
+
 # Default recipe - show available commands
 default:
     @just --list
@@ -142,3 +164,96 @@ setup-full: setup
     @echo ""
     @echo "Starting React frontend..."
     @just start-react
+
+# Start all required services for foreign user auth demo (platform-api, clj-pg-wrapper, capitol-llm, demo-proxy-app)
+start-services:
+    #!/usr/bin/env bash
+    set -e
+    echo -e "{{ BLUE }}========================================{{ NC }}"
+    echo -e "{{ BLUE }}Starting Foreign User Auth Demo Services{{ NC }}"
+    echo -e "{{ BLUE }}========================================{{ NC }}"
+    echo ""
+
+    # Check if parallel is installed
+    if ! command -v parallel &> /dev/null; then
+        echo -e "{{ YELLOW }}⚠ GNU parallel not installed, starting services sequentially...{{ NC }}"
+        echo ""
+        echo -e "{{ YELLOW }}Starting platform-api...{{ NC }}"
+        just _dir_command {{ platform_api_dir }} 'just up'
+        echo -e "{{ YELLOW }}Starting clj-pg-wrapper...{{ NC }}"
+        just _dir_command {{ clj_pg_wrapper_dir }} 'just up'
+        echo -e "{{ YELLOW }}Starting capitol-llm...{{ NC }}"
+        just _dir_command {{ capitol_llm_dir }} 'just up'
+        echo -e "{{ YELLOW }}Starting demo-proxy-app...{{ NC }}"
+        just start
+    else
+        echo -e "{{ YELLOW }}Starting services in parallel...{{ NC }}"
+        echo ""
+        parallel -j4 --tag --lb --tty --tagstring '\033[3{%}m[Job {%}] [{}]\033[0m' \
+        "just _dir_command {} 'just up'" ::: {{ platform_api_dir }} {{ clj_pg_wrapper_dir }} {{ capitol_llm_dir }}
+        echo ""
+        echo -e "{{ YELLOW }}Starting demo-proxy-app...{{ NC }}"
+        just start
+    fi
+
+    echo ""
+    echo -e "{{ GREEN }}========================================{{ NC }}"
+    echo -e "{{ GREEN }}✓ All services started!{{ NC }}"
+    echo -e "{{ GREEN }}========================================{{ NC }}"
+    echo ""
+    echo -e "{{ BLUE }}Services running on:{{ NC }}"
+    echo -e "  • Platform API:      {{ YELLOW }}http://localhost:8811{{ NC }} (docs: http://localhost:8811/docs)"
+    echo -e "  • CLJ PG Wrapper:    {{ YELLOW }}http://localhost:8400{{ NC }}"
+    echo -e "  • Capitol LLM:       {{ YELLOW }}http://localhost:8003{{ NC }}"
+    echo -e "  • Demo Proxy App:    {{ YELLOW }}http://localhost:8000{{ NC }} (docs: http://localhost:8000/docs)"
+    echo ""
+    echo -e "{{ YELLOW }}Next steps:{{ NC }}"
+    echo "  1. Run: just setup-demo        # Configure API key"
+    echo "  2. Run: ./test-foreign-user.sh # Test foreign user authentication"
+    echo ""
+
+# Stop all services (platform-api, clj-pg-wrapper, capitol-llm, demo-proxy-app)
+stop-services:
+    #!/usr/bin/env bash
+    echo -e "{{ YELLOW }}Stopping all services...{{ NC }}"
+    echo ""
+
+    # Check if parallel is installed
+    if ! command -v parallel &> /dev/null; then
+        just _dir_command {{ platform_api_dir }} 'just down'
+        just _dir_command {{ clj_pg_wrapper_dir }} 'just down'
+        just _dir_command {{ capitol_llm_dir }} 'just down'
+        just stop
+    else
+        parallel -j4 --tag --lb --tty --tagstring '\033[3{%}m[Job {%}] [{}]\033[0m' \
+        "just _dir_command {} 'just down'" ::: {{ platform_api_dir }} {{ clj_pg_wrapper_dir }} {{ capitol_llm_dir }}
+        just stop
+    fi
+
+    echo ""
+    echo -e "{{ GREEN }}✓ All services stopped{{ NC }}"
+
+# Run the foreign user authentication test
+test-foreign-auth:
+    #!/usr/bin/env bash
+    if [ ! -f test-foreign-user.sh ]; then
+        echo -e "{{ YELLOW }}⚠ test-foreign-user.sh not found{{ NC }}"
+        exit 1
+    fi
+    chmod +x test-foreign-user.sh
+    ./test-foreign-user.sh
+
+# Full demo: start services, setup, and run tests
+demo-full:
+    @echo -e "{{ BLUE }}========================================{{ NC }}"
+    @echo -e "{{ BLUE }}Foreign User Auth - Full Demo{{ NC }}"
+    @echo -e "{{ BLUE }}========================================{{ NC }}"
+    @echo ""
+    just start-services
+    @sleep 5
+    @echo -e "{{ YELLOW }}Configuring API key...{{ NC }}"
+    just setup-demo
+    @echo ""
+    @echo -e "{{ YELLOW }}Running authentication tests...{{ NC }}"
+    @sleep 2
+    just test-foreign-auth
