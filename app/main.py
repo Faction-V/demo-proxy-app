@@ -34,14 +34,25 @@ class StoryPayload(BaseModel):
 
 
 # Helper function to add required headers
-def add_custom_headers(original_content_type=None):
+def add_custom_headers(original_content_type=None, incoming_headers=None):
+    """
+    Add custom headers for API requests following the clojure middleware pattern.
+
+    Args:
+        original_content_type: Content-Type from the original request
+        incoming_headers: Headers from the incoming request to pass through
+    """
+    # Start with default headers (matching clojure middleware pattern)
     headers = {
         "X-Domain": X_DOMAIN,
-        "X-API-Key": X_API_KEY,
-        "X-User-ID": USER_ID,
+        "X-API-Key": X_API_KEY,  # API key for authentication
+        "X-User-ID": USER_ID,     # Default foreign user identifier
         "Accept": "application/json",
-        # "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     }
+
+    # Pass through X-User-ID if provided in incoming request
+    if incoming_headers and "x-user-id" in incoming_headers:
+        headers["X-User-ID"] = incoming_headers["x-user-id"]
 
     # Only add Content-Type if specified, allowing multipart and other types
     if original_content_type:
@@ -95,7 +106,7 @@ async def catch_all(request: Request, path: str):
 
     # Get the original content type from the request
     original_content_type = request.headers.get("Content-Type")
-    custom_headers = add_custom_headers(original_content_type)
+    custom_headers = add_custom_headers(original_content_type, incoming_headers=request.headers)
     logging.info(f"****")
     logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Custom Headers: {dict(custom_headers)}")
     
