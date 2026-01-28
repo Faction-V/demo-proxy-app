@@ -42,11 +42,11 @@ def add_custom_headers(original_content_type=None):
         "Accept": "application/json",
         # "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     }
-    
+
     # Only add Content-Type if specified, allowing multipart and other types
     if original_content_type:
         headers["Content-Type"] = original_content_type
-    
+
     return headers
 
 
@@ -74,7 +74,7 @@ async def catch_all(request: Request, path: str):
 
     stack_id = str(uuid.uuid4())
     # Construct the full URL to forward the request
-    forward_url = f"{FORWARD_URL}/api/{path}"
+    forward_url = f"{FORWARD_URL}/{path}"
     # Extract query params
     query_params = request.url.query
     client_ip = request.client.host if request.client else "Unknown"
