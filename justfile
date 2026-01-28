@@ -83,6 +83,18 @@ setup-demo:
         echo ""; \
         echo "Proxy available at: http://localhost:8000"; \
         echo "API docs: http://localhost:8000/docs"; \
+        echo ""; \
+        echo "4. Seeding organization prompts..."; \
+        curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "Write a comprehensive report about renewable energy", "prompt_type": "generation"}' > /dev/null; \
+        curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "Summarize the key points of climate change research", "prompt_type": "suggested"}' > /dev/null; \
+        curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "Create a detailed analysis of market trends", "prompt_type": "generation"}' > /dev/null; \
+        echo "✓ Seeded 3 prompts for the organization"; \
     else \
         echo "✗ Failed to create API key"; \
         echo "Make sure platform-api is running at http://localhost:8811"; \
