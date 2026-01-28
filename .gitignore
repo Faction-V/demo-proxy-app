@@ -2,3 +2,6 @@
 venv
 __pycache__/
 .pyc
+
+# SSL/TLS certificates and private keys
+certs/
