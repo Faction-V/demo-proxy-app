@@ -236,3 +236,110 @@ Now the flow works end-to-end:
 ✅ **Tested**: Both direct API and frontend proxy confirmed working
 ✅ **Root Cause**: Identified and documented
 ✅ **Solution**: Implemented and verified
+
+---
+
+## POST /chat/async Payload Format Fix
+
+### Problem Discovery
+After fixing the `/stories/mini` endpoint, discovered that `/chat/async` was failing with:
+```json
+{"detail": "Failed to trigger story generation: {\"message\":[\"user_query: Field required\"]}"}
+```
+
+### Root Cause Analysis
+
+**Frontend Payload Structure**:
+```javascript
+{
+  "story-id": "uuid",
+  "source-ids": [],
+  "tags": [],
+  "user-config-params": {
+    "userQuery": "Create a detailed analysis",  // camelCase!
+    "format": "auto_mode",
+    "generalWebSearch": false,  // camelCase!
+    "aiImages": true,  // camelCase!
+    // ... more camelCase keys
+  }
+}
+```
+
+**Capitol-LLM Expectations**:
+- All keys must be snake_case
+- `user_query` field is **required** (not optional)
+- Schema defined in: `llm/app/core/system_config/pydantic_schemas.py:99`
+
+**The Problem**:
+- Frontend sends camelCase: `userQuery`, `generalWebSearch`, `aiImages`
+- Platform-API had `kebab_to_snake()` that only converted hyphens to underscores
+- `userQuery` stayed as `userQuery` (not converted)
+- Capitol-LLM validation rejected the request: `user_query: Field required`
+
+### Solution Implementation
+
+**File**: `platform-api/src/routes/users_auth.py:1208-1224`
+
+**New Conversion Function**:
+```python
+def to_snake_case(d):
+    """Recursively convert camelCase and kebab-case keys to snake_case."""
+    if isinstance(d, dict):
+        result = {}
+        for k, v in d.items():
+            # First convert camelCase to snake_case by inserting _ before uppercase letters
+            snake_key = re.sub(r'(?<!^)(?=[A-Z])', '_', k).lower()
+            # Then replace any remaining hyphens with underscores (kebab-case)
+            snake_key = snake_key.replace('-', '_')
+            result[snake_key] = to_snake_case(v)
+        return result
+    elif isinstance(d, list):
+        return [to_snake_case(item) for item in d]
+    else:
+        return d
+```
+
+**Transformation Examples**:
+- `userQuery` → `user_query` ✅
+- `generalWebSearch` → `general_web_search` ✅
+- `aiImages` → `ai_images` ✅
+- `responseLanguage` → `response_language` ✅
+- `callbacks.postUploadIngestion` → `callbacks.post_upload_ingestion` ✅
+- `user-query` (kebab) → `user_query` ✅ (backward compatibility)
+
+### Testing
+
+**Payload Transformation Test**:
+```bash
+# Input (camelCase from frontend)
+{
+  "userQuery": "Create analysis",
+  "generalWebSearch": false,
+  "aiImages": true
+}
+
+# Output (snake_case for capitol-llm)
+{
+  "user_query": "Create analysis",
+  "general_web_search": false,
+  "ai_images": true
+}
+```
+
+### Key Learnings
+
+1. **Multiple Case Conventions**: Frontend (camelCase), gofapi (kebab-case), capitol-llm (snake_case)
+2. **Regex for camelCase**: `r'(?<!^)(?=[A-Z])'` inserts underscore before capitals (except at start)
+3. **Required Fields**: Capitol-LLM strictly validates required fields with Pydantic
+4. **Backward Compatibility**: Function handles both camelCase AND kebab-case for compatibility
+
+### Files Modified
+
+1. `/Users/johnkealy/srv/capitol/platform-api/src/routes/users_auth.py` (lines 1208-1228)
+
+### Status
+
+✅ **Complete**: Payload transformation handles all case conventions
+✅ **Tested**: Python test confirms correct conversions
+✅ **Backward Compatible**: Still handles kebab-case from gofapi
+✅ **Validated**: Matches capitol-llm schema requirements
