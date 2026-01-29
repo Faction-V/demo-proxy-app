@@ -2,7 +2,9 @@
 
 ## Session Summary
 
-This document summarizes the work completed to set up the demo proxy application and implement foreign user authentication following the clj-services (gofapi) pattern.
+This document summarizes the work completed to set up the demo proxy application and implement foreign user authentication following the clj-services (gofapi) pattern. This is part of the **gofapi → platform-api migration** effort.
+
+> **📋 See [GOFAPI_MIGRATION.md](./GOFAPI_MIGRATION.md)** for complete migration status and next steps
 
 ---
 
@@ -212,22 +214,65 @@ API_KEY=cap-dev-OPJC6oTQ-ebB7xRdd-7xydxD0C-oYVbyOYl
 
 ---
 
-## 8. Next Steps / Future Enhancements
+## 8. Migration Status & Next Steps
 
-1. **Production Considerations:**
-   - Implement proper error handling for organization creation failures
-   - Add logging/monitoring for foreign user creation
-   - Consider rate limiting on user creation
+### ✅ Completed Endpoints (BE-955)
+
+**Authentication & User Management:**
+- `GET /user/current-user` - Foreign user authentication with stats fields
+- `GET /user/membership/current-membership` - Subscription info (dual pathway)
+- `GET /user/storyplan-config` - Format settings/storyplan configurations
+- `GET /prompts` - Organization prompts by API key
+
+**Guardrails:**
+- `POST /configs/guardrails/check/prompt` - Prompt validation against org guardrails
+
+**Infrastructure:**
+- Environment validation (`check-env.sh`, `.env.sample`)
+- Service orchestration (`just start-services`, `just stop-services`)
+- Foreign user testing (`test-foreign-user.sh`)
+- Frontend integration with local source (`file:../../frontend/react-lib`)
+
+### 🚧 Pending Migrations (Next Phase)
+
+**Priority 1: Story Management** (Blocking frontend)
+- `GET /list` - List user stories
+- `GET /mini` - Story mini view/preview
+- `POST /prompt` - Create/trigger story generation
+- `GET /events` - Story events/activity logs
+
+**Priority 2: Visualizations**
+- `GET /v2` - Tako chart rendering
+
+**Priority 3: Extended Features**
+- Story CRUD operations (create, update, delete, versions)
+- Credits system
+- Source attribution
+
+> **📋 Complete details in [GOFAPI_MIGRATION.md](./GOFAPI_MIGRATION.md)**
+
+### Technical Decisions Required
+
+1. **Story Storage**: DynamoDB vs Postgres for story data?
+2. **Event Logging**: OpenSearch vs DynamoDB for activity tracking?
+3. **Migration Timeline**: Aggressive (2-3 weeks) vs Conservative (1-2 months)?
+
+### Production Considerations
+
+1. **Error Handling:**
+   - Organization creation failure handling
+   - Foreign user creation logging/monitoring
+   - Rate limiting on user creation
 
 2. **Security:**
-   - Implement API key rotation mechanism
-   - Add audit logging for foreign user access
-   - Consider adding IP whitelisting for API keys
+   - API key rotation mechanism
+   - Audit logging for foreign user access
+   - IP whitelisting for API keys
 
-3. **Features:**
-   - Allow custom user metadata on foreign users
-   - Support organization name/details sync from platform-api to clj-wrapper
-   - Add admin endpoints to manage foreign users
+3. **Performance:**
+   - Response time parity with gofapi
+   - Caching strategy for frequently accessed data
+   - Connection pooling optimization
 
 ---
 
