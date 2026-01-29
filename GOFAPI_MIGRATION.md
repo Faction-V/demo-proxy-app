@@ -17,6 +17,9 @@ This document tracks the migration of endpoints from the Clojure gofapi service 
 ### Guardrails
 - ✅ **POST /configs/guardrails/check/prompt** - Check prompt against organization guardrails
 
+### Project Management
+- ✅ **GET /project/list** - List user projects with sources, counts, and hero images (gofapi-compatible)
+
 ## Pending Migrations 🚧
 
 ### Story Management
