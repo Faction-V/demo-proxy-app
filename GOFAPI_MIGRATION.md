@@ -20,6 +20,9 @@ This document tracks the migration of endpoints from the Clojure gofapi service 
 ### Project Management
 - ✅ **GET /project/list** - List user projects with sources, counts, and hero images (gofapi-compatible)
 
+### Events System
+- ✅ **GET /events** - Get events for a story (proxies to capitol-llm)
+
 ## Pending Migrations 🚧
 
 ### Story Management
@@ -39,14 +42,6 @@ This document tracks the migration of endpoints from the Clojure gofapi service 
   - Body: Story configuration and prompt
   - Used by: Story creation workflow
   - Location: `gofapi/src/clj/gofapi/stories/routes.clj`
-
-### Events System
-**Priority: MEDIUM** - Story activity tracking
-
-- ❌ **GET /events** - Get events for a story
-  - Query params: `story-id=<uuid>`
-  - Used by: Activity logs, story history
-  - Location: `gofapi/src/clj/gofapi/events/routes.clj`
 
 ### Tako Charts/Visualizations
 **Priority: MEDIUM** - Data visualization features
