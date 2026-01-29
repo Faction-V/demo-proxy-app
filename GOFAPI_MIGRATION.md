@@ -9,10 +9,12 @@ This document tracks the migration of endpoints from the Clojure gofapi service 
 ### User Authentication & Management
 - ✅ **GET /user/current-user** - Get current user information (supports foreign user auth)
 - ✅ **GET /user/membership/current-membership** - Get user subscription/membership (dual pathway support)
+- ✅ **GET /user/current-token** - Get JWT authentication token (30-day expiration, foreign user auth)
 
 ### Organization Resources
 - ✅ **GET /prompts** - Get organization prompts by API key (alias for /org-prompts/:orgid)
 - ✅ **GET /user/storyplan-config** - Get user's storyplan configurations (format settings)
+- ✅ **GET /organizations/me** - Get user's organizations (supports foreign user auth)
 
 ### Guardrails
 - ✅ **POST /configs/guardrails/check/prompt** - Check prompt against organization guardrails
@@ -25,11 +27,15 @@ This document tracks the migration of endpoints from the Clojure gofapi service 
 
 ### Story Management
 - ✅ **GET /stories/mini** - Get story mini view with database info + capitol-llm attributes
+  - **Key Feature**: Returns 200 with `{"createdAt": null}` for new stories (instead of 404)
+  - Frontend checks `createdAt === null` to determine if story needs generation
+  - This triggers the call to `/chat/async` for new story creation
+  - Location: `platform-api/src/routes/users_auth.py:1065-1072`
 - ✅ **POST /chat/async** - Initiate story generation (returns WebSocket address for streaming)
   - Note: Previously documented as "POST /prompt" but actual endpoint is /chat/async
   - Body: Story configuration, user config params, tags, source IDs, project ID
   - Used by: Story creation workflow
-  - Location: `platform-api/src/routes/users_auth.py:1090`
+  - Location: `platform-api/src/routes/users_auth.py:1150`
   - Database: Creates story record via `clj-pg-wrapper/src/routes/stories.py:107`
 
 ## Pending Migrations 🚧
