@@ -4,7 +4,7 @@
 _work_dir := parent_directory(justfile_directory())
 platform_api_dir := _work_dir + "/platform-api"
 clj_pg_wrapper_dir := _work_dir + "/clj-pg-wrapper"
-capitol_llm_dir := _work_dir + "/capitol-llm"
+capitol_llm_dir := _work_dir + "/llm"
 demo_proxy_dir := justfile_directory()
 
 # Colors for output
