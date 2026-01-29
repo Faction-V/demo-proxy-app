@@ -84,6 +84,11 @@ async def forward_story(payload: StoryPayload):
 async def catch_all(request: Request, path: str):
 
     stack_id = str(uuid.uuid4())
+
+    # Strip /v1/ prefix if present (React library adds it, but platform-api doesn't use it)
+    if path.startswith("v1/"):
+        path = path[3:]  # Remove "v1/"
+
     # Construct the full URL to forward the request
     forward_url = f"{FORWARD_URL}/{path}"
     # Extract query params

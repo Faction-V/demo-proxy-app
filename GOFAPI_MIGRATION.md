@@ -23,24 +23,23 @@ This document tracks the migration of endpoints from the Clojure gofapi service 
 ### Events System
 - ✅ **GET /events** - Get events for a story (proxies to capitol-llm)
 
+### Story Management
+- ✅ **GET /stories/mini** - Get story mini view with database info + capitol-llm attributes
+- ✅ **POST /chat/async** - Initiate story generation (returns WebSocket address for streaming)
+  - Note: Previously documented as "POST /prompt" but actual endpoint is /chat/async
+  - Body: Story configuration, user config params, tags, source IDs, project ID
+  - Used by: Story creation workflow
+  - Location: `platform-api/src/routes/users_auth.py:1090`
+  - Database: Creates story record via `clj-pg-wrapper/src/routes/stories.py:107`
+
 ## Pending Migrations 🚧
 
 ### Story Management
-**Priority: HIGH** - Core functionality for story generation
+**Priority: HIGH** - Core functionality for story viewing
 
 - ❌ **GET /list** - List user stories
   - Query params: `sources=true` (include source attribution)
   - Used by: Dashboard, story list views
-  - Location: `gofapi/src/clj/gofapi/stories/routes.clj`
-
-- ❌ **GET /mini** - Get story mini view
-  - Query params: `migrate=true&story-id=<uuid>`
-  - Used by: Story preview, quick access
-  - Location: `gofapi/src/clj/gofapi/stories/routes.clj`
-
-- ❌ **POST /prompt** - Create/trigger story generation
-  - Body: Story configuration and prompt
-  - Used by: Story creation workflow
   - Location: `gofapi/src/clj/gofapi/stories/routes.clj`
 
 ### Tako Charts/Visualizations
