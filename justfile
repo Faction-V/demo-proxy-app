@@ -150,6 +150,10 @@ config:
     @cat .env
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# Check environment configuration
+check-env:
+    @./check-env.sh
+
 # Start React frontend
 start-react:
     @echo "Starting React demo frontend..."
