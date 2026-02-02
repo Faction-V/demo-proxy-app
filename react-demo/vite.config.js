@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/proxy\/capitolai\/api/, ''),
         },
         '^/proxy/platform': {
-          target: 'http://localhost:8811',
+          target: 'http://localhost:8000/api',
           changeOrigin: isDev,
           secure: !isDev,
           rewrite: (path) => path.replace(/^\/proxy\/platform/, ''),

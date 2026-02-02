@@ -6,6 +6,8 @@ import httpx
 import json
 from datetime import datetime
 import uuid
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 
 app = FastAPI()
@@ -24,6 +26,41 @@ X_API_KEY = os.getenv(
     "API_KEY", "your-default-api-key"
 )  # Replace with your API key or environment variable
 USER_ID = "1"  # Hardcoded user ID
+
+# Database connection for fetching sources
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+
+# Create SQLAlchemy engine
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def get_user_source_ids(user_id: str) -> list[str]:
+    """
+    Fetch all source IDs for a given user from the database.
+
+    Args:
+        user_id: The user ID to fetch sources for
+
+    Returns:
+        List of source ID strings
+    """
+    try:
+        with SessionLocal() as session:
+            # Query for all recent sources (simplified for testing)
+            # TODO: Add proper org_id or user_id filtering once auth is properly mapped
+            query = text("""
+                SELECT id FROM sources
+                ORDER BY created_at DESC
+                LIMIT 10
+            """)
+            result = session.execute(query)
+            source_ids = [str(row[0]) for row in result.fetchall()]
+            logging.info(f"Found {len(source_ids)} source IDs (all recent): {source_ids}")
+            return source_ids
+    except Exception as e:
+        logging.error(f"Error fetching source IDs: {e}")
+        return []
 
 
 # Define the request model for the specific POST request
@@ -114,13 +151,39 @@ async def catch_all(request: Request, path: str):
     custom_headers = add_custom_headers(original_content_type, incoming_headers=request.headers)
     logging.info(f"****")
     logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Custom Headers: {dict(custom_headers)}")
-    
+
+    # Intercept /chat/async requests to inject source IDs
+    modified_body = body
+    if path.endswith("chat/async") and request.method == "POST":
+        try:
+            # Parse the JSON body
+            body_json = json.loads(body.decode('utf-8'))
+
+            # Get the user ID from headers
+            user_id = custom_headers.get("X-User-ID", USER_ID)
+
+            # Fetch all source IDs for this user
+            source_ids = get_user_source_ids(user_id)
+
+            if source_ids:
+                # Add source-ids to the payload
+                body_json["source-ids"] = source_ids
+                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Injected {len(source_ids)} source IDs into chat/async request: {source_ids}")
+
+                # Convert back to bytes
+                modified_body = json.dumps(body_json).encode('utf-8')
+            else:
+                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} No sources found for user {user_id}, forwarding request without source-ids")
+        except Exception as e:
+            logging.error(f"Timestamp: {timestamp} Stack ID: {stack_id} Error injecting source IDs: {e}")
+            # Continue with original body if there's an error
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.request(
             method=request.method,
             url=f"{forward_url}?{query_params}",
             headers=custom_headers,  # Add custom headers here
-            content=body,
+            content=modified_body,
         )
 
     # Log the response for debugging
