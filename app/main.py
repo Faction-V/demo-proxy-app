@@ -63,6 +63,52 @@ def get_user_source_ids(user_id: str) -> list[str]:
         return []
 
 
+def get_user_sources_with_details(user_id: str) -> list[dict]:
+    """
+    Fetch all sources for a given user with their download URLs and metadata.
+
+    Args:
+        user_id: The user ID to fetch sources for
+
+    Returns:
+        List of source dictionaries with download_url, source_url, and source_id
+    """
+    try:
+        with SessionLocal() as session:
+            # Query for recent sources with embedding data
+            query = text("""
+                SELECT
+                    id,
+                    embedding_details->>'embedded_file_url' as embedded_file_url,
+                    details->>'filename' as filename,
+                    embedding_hash
+                FROM sources
+                WHERE embedding_hash IS NOT NULL
+                ORDER BY created_at DESC
+                LIMIT 10
+            """)
+            result = session.execute(query)
+
+            sources = []
+            for row in result.fetchall():
+                source_id, download_url, filename, embedding_hash = row
+
+                # Only include sources that have embeddings
+                if download_url and embedding_hash:
+                    sources.append({
+                        "download_url": download_url,
+                        "source_url": download_url,  # Use same URL for both
+                        "source_id": str(source_id),
+                        "filename": filename or f"source-{source_id}"
+                    })
+
+            logging.info(f"Found {len(sources)} embedded sources with download URLs")
+            return sources
+    except Exception as e:
+        logging.error(f"Error fetching source details: {e}")
+        return []
+
+
 # Define the request model for the specific POST request
 class StoryPayload(BaseModel):
     story_id: str
@@ -152,7 +198,7 @@ async def catch_all(request: Request, path: str):
     logging.info(f"****")
     logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Custom Headers: {dict(custom_headers)}")
 
-    # Intercept /chat/async requests to inject source IDs
+    # Intercept /chat/async requests to inject source documents
     modified_body = body
     if path.endswith("chat/async") and request.method == "POST":
         try:
@@ -162,20 +208,25 @@ async def catch_all(request: Request, path: str):
             # Get the user ID from headers
             user_id = custom_headers.get("X-User-ID", USER_ID)
 
-            # Fetch all source IDs for this user
-            source_ids = get_user_source_ids(user_id)
+            # Fetch all sources with download URLs for this user
+            sources = get_user_sources_with_details(user_id)
 
-            if source_ids:
-                # Add source-ids to the payload
-                body_json["source-ids"] = source_ids
-                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Injected {len(source_ids)} source IDs into chat/async request: {source_ids}")
+            if sources:
+                # Ensure user-config-params exists
+                if "user-config-params" not in body_json:
+                    body_json["user-config-params"] = {}
+
+                # Add user_pre_processed_sources to the user-config-params
+                body_json["user-config-params"]["user_pre_processed_sources"] = sources
+                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Injected {len(sources)} pre-processed sources into chat/async request")
+                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Sources: {sources}")
 
                 # Convert back to bytes
                 modified_body = json.dumps(body_json).encode('utf-8')
             else:
-                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} No sources found for user {user_id}, forwarding request without source-ids")
+                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} No embedded sources found for user {user_id}, forwarding request without sources")
         except Exception as e:
-            logging.error(f"Timestamp: {timestamp} Stack ID: {stack_id} Error injecting source IDs: {e}")
+            logging.error(f"Timestamp: {timestamp} Stack ID: {stack_id} Error injecting source documents: {e}")
             # Continue with original body if there's an error
 
     async with httpx.AsyncClient(timeout=10.0) as client:
