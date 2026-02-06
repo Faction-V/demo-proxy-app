@@ -195,6 +195,11 @@ async def catch_all(request: Request, path: str):
     # Get the original content type from the request
     original_content_type = request.headers.get("Content-Type")
     custom_headers = add_custom_headers(original_content_type, incoming_headers=request.headers)
+
+    # Add X-Forwarded-Host for WebSocket address generation
+    # This allows platform-api to return the correct external WebSocket URL
+    custom_headers["X-Forwarded-Host"] = request.headers.get("host", "localhost:8000")
+
     logging.info(f"****")
     logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Custom Headers: {dict(custom_headers)}")
 
