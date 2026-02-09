@@ -122,76 +122,60 @@ POST /api/v1/users/external
 
 ## 3. POC Results - What We Proved
 
-**The POC successfully validated the proxy pattern approach by implementing 6 critical endpoints.**
+**The POC validated the proxy pattern and has grown into a near-complete migration covering 37 endpoints across all service layers.**
 
-### ✅ Fully Working Endpoints (3)
+### ✅ Fully Working Endpoints (37 total across platform-api)
 
-**1. POST `/chat/async` - Story Generation**
-- Accepts story configuration and user prompt
-- Auto-injects source IDs from database (10 most recent)
-- Forwards to capitol-llm for LLM generation
-- Returns `socketAddress` for WebSocket connection
-- End-to-end latency: ~250ms (well under 500ms target)
+**Core Story Flow:**
+1. **POST `/chat/async`** - Story generation (returns WebSocket address; source IDs auto-injected by demo-proxy-app)
+2. **GET `/events`** - Fetch story events (transforms `socket_address` -> `socketAddress`)
+3. **PATCH `/events/bulk`** - Bulk update/delete story events (forwards to capitol-llm)
+4. **GET `/stories/mini`** - Story preview (returns `{"createdAt": null}` for new stories)
+5. **GET `/stories/story`** - Get full story details (via clj-pg-wrapper)
+6. **PUT `/stories/story`** - Update story (via clj-pg-wrapper)
+7. **GET `/stories/story-plan-config`** - Story plan configuration
 
-**2. GET `/events` - Fetch Story Events**
-- Retrieves story events from capitol-llm
-- Transforms `socket_address` → `socketAddress` (camelCase for frontend compatibility)
-- Returns event history for story rendering
-- Supports both initial load and reconnection scenarios
+**Chat & Suggestions:**
+8. **POST `/chat`** - Synchronous chat endpoint
+9. **POST `/chat/suggestions/block`** - AI block editing suggestions
+10. **POST `/chat/suggestions/draft`** - AI draft suggestions
 
-**3. GET/POST `/user/feedback/thumbs` - Story Feedback**
-- GET: Check if user already provided feedback for a story
-- POST: Submit thumbs up/down feedback with optional comment
-- Currently logs feedback (database integration needed for production)
-- Validates authentication and returns feedback ID
+**Source Upload (sync + async with WebSocket):**
+11. **POST `/sources/upload-source/sync`** - Upload JSON/URL with optional embedding
+12. **POST `/sources/upload-source/file`** - Upload PDF/image files
+13. **POST `/sources/ws`** - Create WebSocket address for status updates
+14. **POST `/sources/upload-source`** - Async upload (returns immediately, streams status via WebSocket)
+15. **WebSocket `/ws/{ws_uuid}`** - Real-time upload status via Redis pub/sub
+16. Alias endpoints with `/user/` prefix for gofapi compatibility (3 additional)
 
-### 📋 Endpoints Requiring Implementation (3)
+**User Auth, Config & Feedback:**
+17. **GET `/user/current-user`** - Foreign user info
+18. **GET `/user/current-token`** - JWT (30-day, includes org_id)
+19. **GET `/user/membership/current-membership`** - Subscription plan
+20. **GET `/prompts`** - Organization prompts
+21. **GET `/organizations/me`** - User's organizations (supports JWT + foreign auth)
+22. **Storyplan config** - Full CRUD: GET/POST/PUT/DELETE + default get/set (6 endpoints)
+23. **POST `/configs/guardrails/check/prompt`** - Guardrail validation
+24. **GET `/project/list`** - Enriched project listing
+25. **GET/POST `/user/feedback/thumbs`** - Story feedback (thumbs up/down)
 
-**4. PATCH `/events/bulk` - Edit Story Content**
-- Bulk update/delete story events
-- Forwards to capitol-llm `/bulk_update/{story_id}`
-- Structure documented but needs event_id field mapping
-
-**5. POST `/sources/upload-source/sync` & `/file` - Upload Sources**
-- Upload JSON/URL sources or PDF/image files
-- Forward to clj-pg-wrapper for processing
-- Trigger embedding generation
-- Structure documented, needs testing
-
-**6. POST `/chat/suggestions/block` - AI Editing**
-- AI-assisted editing for specific story blocks
-- Accepts block context and user instruction
-- Returns AI-generated content suggestions
-- Requires implementation and testing
+> See [GOFAPI_MIGRATION.md](GOFAPI_MIGRATION.md) for the full endpoint table with paths, methods, and implementation notes.
 
 ---
 
 ## 4. Production Requirements - Remaining Work
 
-**To achieve production readiness, we need to complete 3 unimplemented endpoints, upgrade infrastructure, and ensure 100% API compatibility.**
+**All endpoint implementation is complete. Remaining work is infrastructure upgrades and production hardening.**
 
-### A. Endpoint Implementation (3 endpoints)
+### A. Endpoint Implementation -- COMPLETED
 
-**1. PATCH `/events/bulk` - Story Content Editing**
-- **Requirement:** Users manually edit story content in Blocknote editor and save changes
-- **Current State:** Endpoint exists but returns 500 error due to event structure mismatch
-- **Issue:** capitol-llm expects `event_id` field that frontend doesn't provide
-- **Solution:** Platform-api should generate event_ids for events missing them, or capitol-llm should make field optional
-- **Testing:** Create story → edit content → save → verify changes persist
+All three previously-unimplemented endpoints are now functional:
 
-**2. POST `/sources/upload-source/sync` & `/file` - Source Upload**
-- **Requirement:** Users upload documents (JSON, URLs, PDFs, images) as knowledge sources
-- **Current State:** Endpoints created, forward to clj-pg-wrapper, untested
-- **Dependencies:** clj-pg-wrapper source processing, embedding generation
-- **Solution:** Test end-to-end flow, handle file size limits, validate formats
-- **Testing:** Upload each file type → verify embedding generation → search functionality works
+1. **PATCH `/events/bulk`** - Story content editing via capitol-llm `/bulk_update/{story_id}`
+2. **POST `/sources/upload-source/sync` & `/file`** - Source upload proxied through clj-pg-wrapper with embedding generation
+3. **POST `/chat/suggestions/block`** and **`/chat/suggestions/draft`** - AI editing suggestions
 
-**3. POST `/chat/suggestions/block` - AI Block Editing**
-- **Requirement:** Users select text block and ask AI for editing suggestions
-- **Current State:** Endpoint signature defined but not implemented
-- **Dependencies:** Context extraction (surrounding blocks), prompt construction
-- **Solution:** Forward block context + user instruction to capitol-llm
-- **Testing:** Select block → request edit → verify AI suggestions → apply changes
+Additionally, async WebSocket source upload (`POST /sources/upload-source` + `POST /sources/ws` + `WebSocket /ws/{ws_uuid}`) was migrated from clj-services.
 
 ### B. Infrastructure Upgrades
 

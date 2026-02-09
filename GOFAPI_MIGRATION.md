@@ -1,220 +1,207 @@
-# gofapi → platform-api Migration Status
+# gofapi -> platform-api Migration Status
 
 ## Overview
 
 This document tracks the migration of endpoints from the Clojure gofapi service to the Python platform-api service as part of the foreign user authentication implementation (BE-955).
 
-## Completed Migrations ✅
+Three repos are involved:
 
-### User Authentication & Management
-- ✅ **GET /user/current-user** - Get current user information (supports foreign user auth)
-- ✅ **GET /user/membership/current-membership** - Get user subscription/membership (dual pathway support)
-- ✅ **GET /user/current-token** - Get JWT authentication token (30-day expiration, foreign user auth)
+| Repo | Role |
+|------|------|
+| **platform-api** (`src/routes/users_auth.py`) | Public-facing endpoints with foreign user auth |
+| **clj-pg-wrapper** | PostgreSQL access layer (users, stories, projects, sources, storyplan configs) |
+| **demo-proxy-app** (`app/main.py`) | Middleware proxy that injects auth headers and source IDs |
 
-### Organization Resources
-- ✅ **GET /prompts** - Get organization prompts by API key (alias for /org-prompts/:orgid)
-- ✅ **GET /user/storyplan-config** - Get user's storyplan configurations (format settings)
-- ✅ **GET /organizations/me** - Get user's organizations (supports foreign user auth)
+---
+
+## Completed Migrations -- platform-api endpoints
+
+### User Authentication & Session
+
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| POST | `/signup` | User signup | Standard email/password |
+| POST | `/login` | User login | Returns JWT |
+| POST | `/user/otp/sign-in` | OTP sign-in | Sends OTP code |
+| POST | `/user/otp/validate` | OTP validate | Validates OTP code |
+| GET | `/user/current-user` | Current user info | Foreign user auth + session |
+| GET | `/user/current-token` | JWT token | 30-day expiration, includes `org_id` |
+| POST | `/user/sign-out` | Sign out | Invalidates session |
+| GET | `/user/membership/current-membership` | Subscription plan | Returns basic/premium |
+
+### Organization & Prompts
+
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| GET | `/prompts` | Org prompts | Extracts org_id from API key |
+| GET | `/organizations/me` | User's organizations | Supports JWT + foreign auth (`src/routes/organizations.py`) |
+
+### Storyplan Configuration (full CRUD)
+
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| GET | `/user/storyplan-config` | List configs | Via clj-pg-wrapper |
+| POST | `/user/storyplan-config` | Create config | |
+| PUT | `/user/storyplan-config` | Update config | |
+| DELETE | `/user/storyplan-config` | Delete config | |
+| GET | `/user/storyplan-config/default` | Get default config | |
+| POST | `/user/storyplan-config/default` | Set default config | |
 
 ### Guardrails
-- ✅ **POST /configs/guardrails/check/prompt** - Check prompt against organization guardrails
 
-### Project Management
-- ✅ **GET /project/list** - List user projects with sources, counts, and hero images (gofapi-compatible)
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| POST | `/configs/guardrails/check/prompt` | Check prompt | Extracts org_id from API key |
 
-### Events System
-- ✅ **GET /events** - Get events for a story (proxies to capitol-llm)
+### Projects
 
-### Story Management
-- ✅ **GET /stories/mini** - Get story mini view with database info + capitol-llm attributes
-  - **Key Feature**: Returns 200 with `{"createdAt": null}` for new stories (instead of 404)
-  - Frontend checks `createdAt === null` to determine if story needs generation
-  - This triggers the call to `/chat/async` for new story creation
-  - Location: `platform-api/src/routes/users_auth.py:1065-1072`
-- ✅ **POST /chat/async** - Initiate story generation (returns WebSocket address for streaming)
-  - Note: Previously documented as "POST /prompt" but actual endpoint is /chat/async
-  - Body: Story configuration, user config params, tags, source IDs, project ID
-  - Used by: Story creation workflow
-  - Location: `platform-api/src/routes/users_auth.py:1150`
-  - Database: Creates story record via `clj-pg-wrapper/src/routes/stories.py:107`
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| GET | `/project/list` | List projects | Enriched with sources, counts, hero images |
 
-## Pending Migrations 🚧
+### Events
 
-### Story Management
-**Priority: HIGH** - Core functionality for story viewing
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| GET | `/events` | Story events | Proxies to capitol-llm; transforms `socket_address` -> `socketAddress` |
+| PATCH | `/events/bulk` | Bulk update events | Forwards to capitol-llm `/bulk_update/{story_id}` |
 
-- ❌ **GET /list** - List user stories
-  - Query params: `sources=true` (include source attribution)
-  - Used by: Dashboard, story list views
-  - Location: `gofapi/src/clj/gofapi/stories/routes.clj`
+### Stories
+
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| GET | `/stories/mini` | Story preview | Returns `{"createdAt": null}` for new stories (triggers generation) |
+| POST | `/chat/async` | Story generation | Returns WebSocket address; auto-injects source IDs (via demo-proxy-app) |
+| POST | `/chat` | Synchronous chat | Direct chat endpoint |
+| POST | `/chat/suggestions/block` | AI block editing | Suggestions for specific story block |
+| POST | `/chat/suggestions/draft` | AI draft suggestions | Draft-level suggestions |
+| GET | `/stories/story-plan-config` | Story plan config | Via clj-pg-wrapper |
+| GET | `/stories/story` | Get story details | Via clj-pg-wrapper |
+| PUT | `/stories/story` | Update story | Via clj-pg-wrapper |
+
+### Source Upload (synchronous)
+
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| POST | `/sources/upload-source/sync` | Upload JSON/URL source | Proxies to clj-pg-wrapper; optional embedding generation |
+| POST | `/sources/upload-source/file` | Upload PDF/image file | Multipart; proxies to clj-pg-wrapper |
+
+### Source Upload (async with WebSocket)
+
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| POST | `/sources/ws` | Create WebSocket address | Returns `ws-address` for status updates |
+| WebSocket | `/ws/{ws_uuid}` | WebSocket handler | Subscribes to Redis pub/sub channel |
+| POST | `/sources/upload-source` | Async upload | Returns immediately; publishes status to Redis |
+| POST | `/user/sources/ws` | Alias with `/user` prefix | gofapi compatibility |
+| WebSocket | `/user/ws/{ws_uuid}` | Alias with `/user` prefix | gofapi compatibility |
+| POST | `/user/sources/upload-source` | Alias with `/user` prefix | gofapi compatibility |
+
+### Feedback
+
+| Method | Path | Description | Notes |
+|--------|------|-------------|-------|
+| GET | `/user/feedback/thumbs` | Check feedback | Check if user gave feedback for a story |
+| POST | `/user/feedback/thumbs` | Submit feedback | Thumbs up/down with optional comment |
+
+---
+
+## Completed Migrations -- clj-pg-wrapper endpoints
+
+These are the database-access endpoints called by platform-api (not exposed directly to the frontend):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/users/external` | Get-or-create foreign user |
+| GET | `/api/v1/projects/list` | Enriched project listing |
+| POST | `/story` | Create story record |
+| GET | `/story/basic-info` | Get story basic info |
+| GET | `/story` | Get full story details |
+| PUT | `/story` | Update story record |
+| GET | `/user/storyplan-config/*` | Storyplan config CRUD |
+| POST | `/api/v1/sources/upload-source/sync` | Source upload (JSON/URL) |
+| POST | `/api/v1/sources/upload-source/file` | Source upload (file) |
+
+---
+
+## Completed Migrations -- demo-proxy-app
+
+| Feature | Description |
+|---------|-------------|
+| Header injection | `X-API-Key`, `X-User-ID`, `X-Domain` on every request |
+| Path stripping | Removes `/v1/` prefix from React library paths |
+| Source auto-injection | Queries PostgreSQL for 10 most recent embedded sources, injects `user_pre_processed_sources` with download URLs into `POST /chat/async` |
+| `X-Forwarded-Host` | Enables correct WebSocket address generation in responses |
+
+---
+
+## Pending Migrations
 
 ### Tako Charts/Visualizations
 **Priority: MEDIUM** - Data visualization features
 
-- ❌ **GET /v2** - Get Tako chart preview link
+- **GET /v2** - Get Tako chart preview link
   - Query params: `orgid=<uuid>&erid=<uuid>&l=...`
   - Used by: Chart/visualization rendering
   - Location: `gofapi/src/clj/gofapi/tako/routes.clj`
 
-### Additional Story Endpoints
-**Priority: LOW-MEDIUM** - Extended story functionality
-
-- ❌ **GET /story/events** - Get events for specific story (alternate route)
-- ❌ **POST /stories** - Create new story
-- ❌ **PATCH /stories/:id** - Update story
-- ❌ **DELETE /stories/:id** - Delete story
-- ❌ **GET /stories/:id/versions** - Get story versions
-
 ### Credits System
 **Priority: LOW** - Usage tracking (may use DynamoDB directly)
 
-- ❌ **GET /credits** - Get user credit balance
-- ❌ **POST /credits/deduct** - Deduct credits for operations
+- **GET /credits** - Get user credit balance
+- **POST /credits/deduct** - Deduct credits for operations
 
-### Sources & Attribution
-**Priority: LOW** - Source management for generated content
+### Sources (listing/deletion)
+**Priority: LOW** - Source management
 
-- ❌ **GET /sources** - List sources for organization
-- ❌ **POST /sources** - Add source
-- ❌ **DELETE /sources/:id** - Remove source
+- **GET /sources** - List sources for organization
+- **DELETE /sources/:id** - Remove source
 
-## Migration Strategy
+### Story Versioning
+**Priority: LOW** - Extended story functionality
 
-### Phase 1: Core Story Functionality (Current Blocker)
-Focus on endpoints needed for basic story generation and viewing:
-1. **GET /list** - Users need to see their stories
-2. **GET /mini** - Users need to preview stories
-3. **POST /prompt** - Users need to create stories
-4. **GET /events** - Users need to see story activity
+- **GET /stories/:id/versions** - Get story versions
+- **DELETE /stories/:id** - Delete story
 
-**Estimated Effort**: 2-3 days
-- Story schema/models in DynamoDB or Postgres
-- Story generation integration with capitol-llm
-- Event logging system
+---
 
-### Phase 2: Visualizations & Charts
-1. **GET /v2** - Tako chart rendering
+## Architecture
 
-**Estimated Effort**: 1-2 days
-- Chart generation service integration
-- URL generation and signing
+### Authentication Flow
 
-### Phase 3: Extended Functionality
-1. Story CRUD operations (create, update, delete)
-2. Version management
-3. Source attribution
-
-**Estimated Effort**: 2-3 days
-
-### Phase 4: Credits & Metering
-1. Credit balance management
-2. Usage tracking
-3. Deduction logic
-
-**Estimated Effort**: 1-2 days
-
-## Technical Considerations
-
-### Data Storage Migration
-- **Stories**: Need to determine storage (DynamoDB vs Postgres via clj-pg-wrapper)
-- **Events**: Likely OpenSearch or DynamoDB for event logging
-- **Credits**: DynamoDB (possibly already migrated)
+```
+Customer Frontend  -->  Customer Backend  -->  demo-proxy-app  -->  platform-api
+                        (injects X-User-ID)    (injects X-API-Key,   (validates key,
+                                                X-Domain, sources)    get-or-create user)
+                                                                        |
+                                                                        v
+                                                                   clj-pg-wrapper
+                                                                   (PostgreSQL)
+```
 
 ### Service Dependencies
-- **capitol-llm**: Story generation backend
-- **clj-pg-wrapper**: Postgres access for user/org data
-- **OpenSearch**: Event logging, search functionality
 
-### Authentication
-All endpoints must support **dual authentication**:
-1. **Foreign User Auth**: X-API-Key + X-User-ID headers
-2. **Session Auth**: Cookie-based session (for backward compatibility)
+| Service | Used For |
+|---------|----------|
+| capitol-llm | Story generation, events, suggestions |
+| clj-pg-wrapper | PostgreSQL access (users, stories, projects, sources, configs) |
+| Redis | Foreign user cache (5-min TTL), WebSocket pub/sub |
+| DynamoDB | API key validation, storyplan configs |
+| S3 | Source document storage |
+| Lambda | Embedding generation |
+| Qdrant | Vector search for story generation |
 
-### Foreign User Considerations
-- Foreign users need isolated story storage per organization
-- Credit tracking per organization (not individual foreign user)
-- Events should track foreign user activity separately
+### Dual Authentication
 
-## Database Schema Requirements
+All endpoints support both pathways:
+1. **Foreign User Auth**: `X-API-Key` + `X-User-ID` headers (for customer integrations)
+2. **Session Auth**: Cookie-based session (for internal/backward compatibility)
 
-### Stories Table
-```python
-{
-    "story_id": "uuid",
-    "user_id": "uuid",  # Foreign or regular user
-    "org_id": "uuid",   # Organization (for foreign users)
-    "title": "string",
-    "content": "text",
-    "config": "json",   # Story plan configuration
-    "status": "enum",   # draft, generating, completed, failed
-    "sources": "json[]", # Source attribution
-    "created_at": "timestamp",
-    "updated_at": "timestamp"
-}
-```
+---
 
-### Story Events Table
-```python
-{
-    "event_id": "uuid",
-    "story_id": "uuid",
-    "event_type": "string",  # created, updated, viewed, shared
-    "user_id": "uuid",
-    "metadata": "json",
-    "timestamp": "timestamp"
-}
-```
+## Related Links
 
-## Testing Strategy
-
-For each migrated endpoint:
-1. ✅ Unit tests with foreign user auth
-2. ✅ Unit tests with session auth
-3. ✅ Integration tests with demo-proxy-app
-4. ✅ Frontend integration tests
-5. ✅ Performance benchmarking vs gofapi
-
-## Rollout Plan
-
-### Phase 1: Parallel Run (Safe)
-- Both gofapi and platform-api running
-- Traffic gradually shifted to platform-api
-- Fallback to gofapi if issues arise
-
-### Phase 2: Platform-API Primary
-- Platform-api handles all new requests
-- gofapi only for legacy support
-
-### Phase 3: Deprecate gofapi
-- Remove gofapi from infrastructure
-- Complete migration
-
-## Related Tickets
-
-- **BE-955**: Foreign user authentication implementation (Current)
-- **BE-XXX**: Story management migration (To be created)
-- **BE-XXX**: Events system migration (To be created)
-- **BE-XXX**: Tako charts migration (To be created)
-
-## Questions & Decisions Needed
-
-1. **Story Storage**: DynamoDB or Postgres?
-   - Recommendation: DynamoDB for scalability, Postgres for relational queries
-
-2. **Event Logging**: OpenSearch or DynamoDB?
-   - Recommendation: OpenSearch (already used for guardrails failures)
-
-3. **Credits System**: Migrate or keep in gofapi?
-   - Recommendation: Migrate to DynamoDB (consistent with other resources)
-
-4. **Migration Timeline**: Aggressive or conservative?
-   - Current: Focus on story endpoints blocking frontend (Phase 1)
-   - Defer: Charts, versions, advanced features
-
-## Success Metrics
-
-- ✅ All frontend flows work without gofapi
-- ✅ Response times comparable to gofapi
-- ✅ Foreign user auth works for all endpoints
-- ✅ Zero data loss during migration
-- ✅ Backward compatibility maintained
+- **Epic:** [COM-21](https://capitolai.atlassian.net/browse/COM-21) - Deprecate clj-services
+- **Task:** [COM-22](https://capitolai.atlassian.net/browse/COM-22) - Proxy Demo App POC
+- **Demo:** [Loom Walkthrough](https://www.loom.com/share/88ac83881ab64fcfb05449a5086ac3f4)
+- **Repos:** demo-proxy-app, platform-api, clj-pg-wrapper (all branch `BE-955-proxy-demo-app-poc`)

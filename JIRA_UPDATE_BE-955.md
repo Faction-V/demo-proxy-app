@@ -144,12 +144,12 @@ The following gofapi endpoints are being called by the frontend but return 404:
 ## 📊 MIGRATION STATUS SUMMARY
 
 **Total Endpoints Identified**: ~15-20
-**Completed**: 5 endpoints (User auth, prompts, guardrails)
-**In Progress**: 0
-**Pending**: 10-15 endpoints (Story, events, charts, credits, sources)
+**Completed**: 15+ endpoints (auth, prompts, guardrails, story generation, events, source upload, WebSocket upload, story mini, project list, feedback, JWT tokens, organizations, events/bulk, suggestions/block)
+**Pending**: ~5-8 endpoints (Tako charts, story CRUD, credits, source listing/deletion)
 
-**Completion**: ~25% (Auth foundation complete)
-**Remaining Effort**: 6-10 days (depending on complexity)
+**Completion**: ~75% (Core story flow complete, remaining items are lower priority)
+
+> **Note:** See GOFAPI_MIGRATION.md for the authoritative endpoint migration tracker.
 
 ---
 
