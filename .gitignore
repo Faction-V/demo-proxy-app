@@ -1,5 +1,8 @@
 .env
+react-demo/.env
+vue-demo/.env
 venv
+.venv-test
 __pycache__/
 .pyc
 

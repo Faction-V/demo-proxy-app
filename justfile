@@ -27,7 +27,7 @@ default:
     @just --list
 
 # Start the application
-start:
+start: _ensure-env
     docker-compose up -d
     @echo "✓ Application started at http://localhost:8000"
     @echo "✓ API docs available at http://localhost:8000/docs"
@@ -52,7 +52,7 @@ build:
     @echo "✓ Application built"
 
 # Setup demo account with API key
-setup-demo:
+setup-demo: _ensure-env
     @echo "Setting up demo account..."
     @echo ""
     @echo "1. Creating API key for demo organization..."
@@ -118,6 +118,20 @@ test:
     @echo "Testing proxy connection..."
     @curl -s http://localhost:8000/api/health | jq '.' || echo "Proxy is running but endpoint may not exist"
 
+# Run end-to-end integration tests against the running proxy
+test-e2e:
+    #!/usr/bin/env bash
+    set -e
+    echo -e "{{ BLUE }}Running e2e tests against proxy...{{ NC }}"
+    # Install test deps if needed (into a local venv)
+    if [ ! -d .venv-test ]; then
+        # Prefer newer Python; fall back to python3
+        PYTHON=$(command -v python3.11 2>/dev/null || command -v python3.10 2>/dev/null || command -v python3)
+        $PYTHON -m venv .venv-test
+        .venv-test/bin/pip install -q --index-url https://pypi.org/simple/ -r requirements-test.txt
+    fi
+    .venv-test/bin/pytest tests/ -v --timeout=30 "$@"
+
 # Check application status
 status:
     @echo "Application Status:"
@@ -131,8 +145,17 @@ clean:
     docker-compose down -v
     @echo "✓ Cleaned up containers and volumes"
 
+# Ensure .env exists (copies from .env.sample if missing)
+_ensure-env:
+    #!/usr/bin/env bash
+    if [ ! -f .env ]; then
+        echo "No .env file found — creating from .env.sample..."
+        cp .env.sample .env
+        echo "✓ Created .env from .env.sample"
+    fi
+
 # Full setup - build, start, and setup demo account
-setup: build start
+setup: _ensure-env build start
     @sleep 3
     @just setup-demo
 

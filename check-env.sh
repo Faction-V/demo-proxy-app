@@ -28,7 +28,7 @@ if [ ! -f .env ]; then
 fi
 
 # Required environment variables
-REQUIRED_VARS=("DOMAIN" "API_URL" "API_KEY")
+REQUIRED_VARS=("DOMAIN" "API_URL" "API_KEY" "DATABASE_URL")
 MISSING_VARS=()
 PLACEHOLDER_VARS=()
 
@@ -52,9 +52,10 @@ if [ ${#MISSING_VARS[@]} -eq 0 ] && [ ${#PLACEHOLDER_VARS[@]} -eq 0 ]; then
     echo -e "${GREEN}✓ All required environment variables are configured${NC}"
     echo ""
     echo "Current configuration:"
-    echo "  DOMAIN: $(grep '^DOMAIN=' .env | cut -d'=' -f2-)"
-    echo "  API_URL: $(grep '^API_URL=' .env | cut -d'=' -f2-)"
-    echo "  API_KEY: $(grep '^API_KEY=' .env | cut -d'=' -f2- | cut -c1-20)..."
+    echo "  DOMAIN:       $(grep '^DOMAIN=' .env | cut -d'=' -f2-)"
+    echo "  API_URL:      $(grep '^API_URL=' .env | cut -d'=' -f2-)"
+    echo "  API_KEY:      $(grep '^API_KEY=' .env | cut -d'=' -f2- | cut -c1-20)..."
+    echo "  DATABASE_URL: $(grep '^DATABASE_URL=' .env | cut -d'=' -f2- | sed 's|://[^@]*@|://***@|')"
     echo ""
     echo -e "${GREEN}✓ Environment is ready!${NC}"
     exit 0
