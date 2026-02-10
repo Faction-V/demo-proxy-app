@@ -1,0 +1,48 @@
+name: CI Pipeline
+
+on:
+  push:
+
+permissions: read-all
+
+jobs:
+  build:
+    if: github.event_name == 'push'
+    runs-on: self-hosted
+    name: Build and Push Image
+    permissions: write-all
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Determine Docker Tag
+        id: docker-tag
+        run: |
+          if [ "${{ github.ref_type }}" == "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            BRANCH_SLUG=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | tr '/' '-')
+            GIT_SHORT_SHA=$(git rev-parse --short HEAD)
+            TAG="${BRANCH_SLUG}-${GIT_SHORT_SHA}"
+          fi
+          echo "Generated tag: $TAG"
+          echo "docker_tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push demo-proxy-app Image
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/demo-proxy-app:${{ steps.docker-tag.outputs.docker_tag }}
