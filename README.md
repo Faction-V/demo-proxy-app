@@ -195,13 +195,6 @@ platform-api uses these headers to create/lookup foreign users via clj-pg-wrappe
 | File | Description |
 |------|-------------|
 | [GOFAPI_MIGRATION.md](GOFAPI_MIGRATION.md) | Endpoint migration tracker (gofapi to platform-api) |
-| [DESIGN_DOC_COM-22.md](DESIGN_DOC_COM-22.md) | Full POC design document with architecture, data flow, and trade-offs |
-| [PRODUCTION_DESIGN_COM-22.md](PRODUCTION_DESIGN_COM-22.md) | Production deployment plan and remaining work |
-| [SOURCE_UPLOAD_IMPLEMENTATION.md](SOURCE_UPLOAD_IMPLEMENTATION.md) | Source upload and embedding integration |
-| [WEBSOCKET_SOURCE_UPLOAD.md](WEBSOCKET_SOURCE_UPLOAD.md) | WebSocket async upload architecture |
-| [WEBSOCKET_QUICKSTART.md](WEBSOCKET_QUICKSTART.md) | Quick start guide for WebSocket uploads (JS/Python/React examples) |
-| [WEBSOCKET_MIGRATION_SUMMARY.md](WEBSOCKET_MIGRATION_SUMMARY.md) | WebSocket migration summary and next steps |
-| [SESSION_SUMMARY.md](SESSION_SUMMARY.md) | Session notes: JWT auth flow, story creation flow fix, payload format fix |
 
 ## Related Repositories
 
