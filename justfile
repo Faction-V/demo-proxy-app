@@ -213,23 +213,35 @@ start-services:
     echo -e "{{ BLUE }}========================================{{ NC }}"
     echo ""
 
-    # Check if parallel is installed
+    # Start capitol-llm first and wait for it to be ready
+    echo -e "{{ YELLOW }}Starting capitol-llm...{{ NC }}"
+    just _dir_command {{ capitol_llm_dir }} 'just up'
+    echo -e "{{ YELLOW }}Waiting for capitol-llm to be ready on port 8003...{{ NC }}"
+    for i in $(seq 1 30); do
+        if curl -sf http://localhost:8003/health > /dev/null 2>&1 || curl -sf http://localhost:8003/ > /dev/null 2>&1; then
+            echo -e "{{ GREEN }}✓ capitol-llm is ready{{ NC }}"
+            break
+        fi
+        if [ "$i" -eq 30 ]; then
+            echo -e "{{ YELLOW }}⚠ capitol-llm not responding after 30s, continuing anyway...{{ NC }}"
+        fi
+        sleep 1
+    done
+    echo ""
+
+    # Start remaining services
     if ! command -v parallel &> /dev/null; then
-        echo -e "{{ YELLOW }}⚠ GNU parallel not installed, starting services sequentially...{{ NC }}"
-        echo ""
         echo -e "{{ YELLOW }}Starting platform-api...{{ NC }}"
         just _dir_command {{ platform_api_dir }} 'just up'
         echo -e "{{ YELLOW }}Starting clj-pg-wrapper...{{ NC }}"
         just _dir_command {{ clj_pg_wrapper_dir }} 'just up'
-        echo -e "{{ YELLOW }}Starting capitol-llm...{{ NC }}"
-        just _dir_command {{ capitol_llm_dir }} 'just up'
         echo -e "{{ YELLOW }}Starting demo-proxy-app...{{ NC }}"
         just start
     else
-        echo -e "{{ YELLOW }}Starting services in parallel...{{ NC }}"
+        echo -e "{{ YELLOW }}Starting remaining services in parallel...{{ NC }}"
         echo ""
-        parallel -j4 --tag --lb --tty --tagstring '\033[3{%}m[Job {%}] [{}]\033[0m' \
-        "just _dir_command {} 'just up'" ::: {{ platform_api_dir }} {{ clj_pg_wrapper_dir }} {{ capitol_llm_dir }}
+        parallel -j3 --tag --lb --tty --tagstring '\033[3{%}m[Job {%}] [{}]\033[0m' \
+        "just _dir_command {} 'just up'" ::: {{ platform_api_dir }} {{ clj_pg_wrapper_dir }}
         echo ""
         echo -e "{{ YELLOW }}Starting demo-proxy-app...{{ NC }}"
         just start
