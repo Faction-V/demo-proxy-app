@@ -92,24 +92,31 @@ async def upload_sample_source():
 
 
 def get_source_for_injection() -> list[dict] | None:
-    """Read the persisted source ID and return injection payload."""
+    """Read the persisted source ID and return injection payload.
+
+    Capitol-llm validates that each entry has exactly {"download_url", "filename"}.
+    """
     try:
         if not SOURCE_ID_FILE.exists():
             return None
 
         source_data = json.loads(SOURCE_ID_FILE.read_text())
-        source_id = source_data["source_id"]
         filename = source_data["filename"]
 
-        # Try to get download_url from the upload response
+        # Get the embedded parquet URL from the upload response
         upload_response = source_data.get("upload_response", {})
         download_url = upload_response.get("download_url") or upload_response.get("embedded_file_url", "")
 
+        if not download_url:
+            logging.warning("No download_url found in source data, skipping injection")
+            return None
+
+        # Capitol-llm expects exactly {download_url, filename} — no extra keys
+        # Use the parquet filename from the URL (matches production pattern)
+        parquet_filename = download_url.split("/")[-1] if "/" in download_url else filename
         return [{
             "download_url": download_url,
-            "source_url": download_url,
-            "source_id": source_id,
-            "filename": filename,
+            "filename": parquet_filename,
         }]
     except Exception as e:
         logging.error(f"Error reading source ID file: {e}")
