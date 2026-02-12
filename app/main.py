@@ -1,16 +1,15 @@
 import os
 import logging
+import asyncio
+from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel
 import httpx
 import json
 from datetime import datetime
 import uuid
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 
-
-app = FastAPI()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -27,86 +26,99 @@ X_API_KEY = os.getenv(
 )  # Replace with your API key or environment variable
 USER_ID = "1"  # Hardcoded user ID
 
-# Database connection for fetching sources
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
-
-# Create SQLAlchemy engine
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Path to persisted source ID
+SOURCE_ID_FILE = Path("/app/source_id.json")
+SAMPLE_SOURCE_FILE = Path(__file__).parent / "sample_source.txt"
 
 
-def get_user_source_ids(user_id: str) -> list[str]:
-    """
-    Fetch all source IDs for a given user from the database.
+async def upload_sample_source():
+    """Upload the sample source document to platform-api on startup."""
+    source_id = str(uuid.uuid4())
+    filename = "sample_source.txt"
 
-    Args:
-        user_id: The user ID to fetch sources for
-
-    Returns:
-        List of source ID strings
-    """
     try:
-        with SessionLocal() as session:
-            # Query for all recent sources (simplified for testing)
-            # TODO: Add proper org_id or user_id filtering once auth is properly mapped
-            query = text("""
-                SELECT id FROM sources
-                ORDER BY created_at DESC
-                LIMIT 10
-            """)
-            result = session.execute(query)
-            source_ids = [str(row[0]) for row in result.fetchall()]
-            logging.info(f"Found {len(source_ids)} source IDs (all recent): {source_ids}")
-            return source_ids
-    except Exception as e:
-        logging.error(f"Error fetching source IDs: {e}")
-        return []
+        content = SAMPLE_SOURCE_FILE.read_text()
+    except FileNotFoundError:
+        logging.error(f"Sample source file not found: {SAMPLE_SOURCE_FILE}")
+        return
+
+    upload_url = f"{FORWARD_URL}/sources/upload-source/sync"
+    headers = {
+        "X-API-Key": X_API_KEY,
+        "X-User-ID": USER_ID,
+        "X-Domain": X_DOMAIN,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "source-id": source_id,
+        "filename": filename,
+        "data": {"content": content},
+        "generate-embedding": True,
+    }
+
+    # Retry with backoff until platform-api is ready
+    for attempt in range(30):
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(upload_url, json=payload, headers=headers)
+
+            if response.status_code == 200:
+                result = response.json()
+                source_data = {
+                    "source_id": source_id,
+                    "filename": filename,
+                    "upload_response": result,
+                }
+                SOURCE_ID_FILE.write_text(json.dumps(source_data, indent=2))
+                logging.info(f"Source uploaded successfully. ID: {source_id}")
+                logging.info(f"Source data written to {SOURCE_ID_FILE}")
+                return
+            else:
+                logging.warning(
+                    f"Source upload attempt {attempt + 1} failed ({response.status_code}): {response.text}"
+                )
+        except Exception as e:
+            logging.warning(f"Source upload attempt {attempt + 1} error: {e}")
+
+        await asyncio.sleep(2)
+
+    logging.error("Failed to upload sample source after 30 attempts")
 
 
-def get_user_sources_with_details(user_id: str) -> list[dict]:
-    """
-    Fetch all sources for a given user with their download URLs and metadata.
-
-    Args:
-        user_id: The user ID to fetch sources for
-
-    Returns:
-        List of source dictionaries with download_url, source_url, and source_id
-    """
+def get_source_for_injection() -> list[dict] | None:
+    """Read the persisted source ID and return injection payload."""
     try:
-        with SessionLocal() as session:
-            # Query for recent sources with embedding data
-            query = text("""
-                SELECT
-                    id,
-                    embedding_details->>'embedded_file_url' as embedded_file_url,
-                    details->>'filename' as filename,
-                    embedding_hash
-                FROM sources
-                WHERE embedding_hash IS NOT NULL
-                ORDER BY created_at DESC
-                LIMIT 10
-            """)
-            result = session.execute(query)
+        if not SOURCE_ID_FILE.exists():
+            return None
 
-            sources = []
-            for row in result.fetchall():
-                source_id, download_url, filename, embedding_hash = row
+        source_data = json.loads(SOURCE_ID_FILE.read_text())
+        source_id = source_data["source_id"]
+        filename = source_data["filename"]
 
-                # Only include sources that have embeddings
-                if download_url and embedding_hash:
-                    sources.append({
-                        "download_url": download_url,
-                        "source_url": download_url,  # Use same URL for both
-                        "source_id": str(source_id),
-                        "filename": filename or f"source-{source_id}"
-                    })
+        # Try to get download_url from the upload response
+        upload_response = source_data.get("upload_response", {})
+        download_url = upload_response.get("download_url") or upload_response.get("embedded_file_url", "")
 
-            logging.info(f"Found {len(sources)} embedded sources with download URLs")
-            return sources
+        return [{
+            "download_url": download_url,
+            "source_url": download_url,
+            "source_id": source_id,
+            "filename": filename,
+        }]
     except Exception as e:
-        logging.error(f"Error fetching source details: {e}")
-        return []
+        logging.error(f"Error reading source ID file: {e}")
+        return None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Upload sample source on startup."""
+    logging.info("Starting source upload...")
+    asyncio.create_task(upload_sample_source())
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 # Define the request model for the specific POST request
@@ -184,7 +196,7 @@ async def catch_all(request: Request, path: str):
     logging.info(f'Timestamp: {timestamp} Stack ID: {stack_id} Client IP: {client_ip} Incoming request: {request.method} {request.url}')
     logging.info(f'Timestamp: {timestamp} Stack ID: {stack_id} Client IP: {client_ip} Headers: {dict(request.headers)}')
     logging.info(f'Timestamp: {timestamp} Stack ID: {stack_id} Client IP: {client_ip} Query params: {query_params}')
-    
+
 
     try:
         body = await request.body()
@@ -207,29 +219,22 @@ async def catch_all(request: Request, path: str):
     modified_body = body
     if path.endswith("chat/async") and request.method == "POST":
         try:
-            # Parse the JSON body
             body_json = json.loads(body.decode('utf-8'))
 
-            # Get the user ID from headers
-            user_id = custom_headers.get("X-User-ID", USER_ID)
-
-            # Fetch all sources with download URLs for this user
-            sources = get_user_sources_with_details(user_id)
+            # Read source from file (uploaded on startup)
+            sources = get_source_for_injection()
 
             if sources:
-                # Ensure user-config-params exists
                 if "user-config-params" not in body_json:
                     body_json["user-config-params"] = {}
 
-                # Add user_pre_processed_sources to the user-config-params
                 body_json["user-config-params"]["user_pre_processed_sources"] = sources
                 logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Injected {len(sources)} pre-processed sources into chat/async request")
                 logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} Sources: {sources}")
 
-                # Convert back to bytes
                 modified_body = json.dumps(body_json).encode('utf-8')
             else:
-                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} No embedded sources found for user {user_id}, forwarding request without sources")
+                logging.info(f"Timestamp: {timestamp} Stack ID: {stack_id} No source ID file found, forwarding request without sources")
         except Exception as e:
             logging.error(f"Timestamp: {timestamp} Stack ID: {stack_id} Error injecting source documents: {e}")
             # Continue with original body if there's an error
@@ -248,7 +253,7 @@ async def catch_all(request: Request, path: str):
 
     # Return the response from the forwarded request, preserving the status code and headers
     # Return the response with JSON content and status code
- 
+
     try:
         json_content = response.json()
         return Response(

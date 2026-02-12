@@ -1,5 +1,3 @@
 fastapi
 uvicorn
-psycopg2-binary
 httpx
-sqlalchemy
