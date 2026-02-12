@@ -52,7 +52,13 @@ async def upload_sample_source():
     payload = {
         "source-id": source_id,
         "filename": filename,
-        "data": {"content": content},
+        "data": {
+            "meta": {
+                "title": "Renewable Energy: A Comprehensive Overview",
+                "filename": filename,
+            },
+            "content": content,
+        },
         "generate-embedding": True,
     }
 
