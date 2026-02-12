@@ -39,7 +39,7 @@ function App() {
   return (
     <CapitolAiWrapper>
       {!currentStoryId ? (
-        <CreateStory callbackOnSubmit={handleCallback} />
+        <CreateStory callbackOnSubmit={handleCallback} enableSources={false} />
       ) : (
         <EditorStory storyId={currentStoryId} />
       )}
