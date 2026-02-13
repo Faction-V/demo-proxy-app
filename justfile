@@ -53,53 +53,56 @@ build:
 
 # Setup demo account with API key
 setup-demo: _ensure-env
-    @echo "Setting up demo account..."
-    @echo ""
-    @echo "1. Creating API key for demo organization..."
-    @export API_KEY=$(curl -s -X POST "http://localhost:8811/internal-api-keys/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
+    #!/usr/bin/env bash
+    set -e
+    echo "Setting up demo account..."
+    echo ""
+    echo "1. Creating API key for demo organization..."
+    API_KEY=$(curl -s -X POST "http://localhost:8811/internal-api-keys/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
         -H "Content-Type: application/json" \
         -d '{"name": "Demo Proxy Key", "description": "API key for demo proxy application"}' \
-        | grep -o '"api_key":"[^"]*"' | cut -d'"' -f4) && \
-    if [ -n "$$API_KEY" ]; then \
-        echo "✓ API Key created: $$API_KEY"; \
-        echo ""; \
-        echo "2. Updating .env file..."; \
-        sed -i.bak "s|API_KEY=.*|API_KEY=$$API_KEY|g" .env; \
-        echo "✓ .env file updated"; \
-        echo ""; \
-        echo "3. Restarting application..."; \
-        docker-compose restart app > /dev/null 2>&1; \
-        echo "✓ Application restarted"; \
-        echo ""; \
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
-        echo "✓ Demo account setup complete!"; \
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
-        echo ""; \
-        echo "Configuration:"; \
-        echo "  - API URL: http://platform_api/public"; \
-        echo "  - API Key: $$API_KEY"; \
-        echo "  - Org ID: f6fffb00-8fbc-4ec4-8d6b-f0e01154a253"; \
-        echo "  - Domain: https://aigrants.co/"; \
-        echo ""; \
-        echo "Proxy available at: http://localhost:8000"; \
-        echo "API docs: http://localhost:8000/docs"; \
-        echo ""; \
-        echo "4. Seeding organization prompts..."; \
-        curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt": "Write a comprehensive report about renewable energy", "prompt_type": "generation"}' > /dev/null; \
-        curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt": "Summarize the key points of climate change research", "prompt_type": "suggested"}' > /dev/null; \
-        curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt": "Create a detailed analysis of market trends", "prompt_type": "generation"}' > /dev/null; \
-        echo "✓ Seeded 3 prompts for the organization"; \
-    else \
-        echo "✗ Failed to create API key"; \
-        echo "Make sure platform-api is running at http://localhost:8811"; \
-        exit 1; \
+        | grep -o '"api_key":"[^"]*"' | cut -d'"' -f4)
+
+    if [ -z "$API_KEY" ]; then
+        echo "✗ Failed to create API key"
+        echo "Make sure platform-api is running at http://localhost:8811"
+        exit 1
     fi
+
+    echo "✓ API Key created: $API_KEY"
+    echo ""
+    echo "2. Updating .env file..."
+    sed -i.bak "s|API_KEY=.*|API_KEY=$API_KEY|g" .env
+    echo "✓ .env file updated"
+    echo ""
+    echo "3. Restarting application..."
+    docker-compose restart app > /dev/null 2>&1
+    echo "✓ Application restarted"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "✓ Demo account setup complete!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Configuration:"
+    echo "  - API URL: http://platform_api/public"
+    echo "  - API Key: $API_KEY"
+    echo "  - Org ID: f6fffb00-8fbc-4ec4-8d6b-f0e01154a253"
+    echo "  - Domain: https://aigrants.co/"
+    echo ""
+    echo "Proxy available at: http://localhost:8000"
+    echo "API docs: http://localhost:8000/docs"
+    echo ""
+    echo "4. Seeding organization prompts..."
+    curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
+        -H "Content-Type: application/json" \
+        -d '{"prompt": "Write a comprehensive report about renewable energy", "prompt_type": "generation"}' > /dev/null
+    curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
+        -H "Content-Type: application/json" \
+        -d '{"prompt": "Summarize the key points of climate change research", "prompt_type": "suggested"}' > /dev/null
+    curl -s -X POST "http://localhost:8811/org-prompts/f6fffb00-8fbc-4ec4-8d6b-f0e01154a253?env=dev" \
+        -H "Content-Type: application/json" \
+        -d '{"prompt": "Create a detailed analysis of market trends", "prompt_type": "generation"}' > /dev/null
+    echo "✓ Seeded 3 prompts for the organization"
 
 # Create a new API key
 create-api-key org_id="f6fffb00-8fbc-4ec4-8d6b-f0e01154a253" env="dev":
