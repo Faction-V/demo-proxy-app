@@ -1,9 +1,8 @@
-FROM python:3.10
+FROM python:3.10-slim
 WORKDIR /app
-COPY . /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
 
-# Install dependencies if required (e.g., requirements.txt)
-RUN pip install -r requirements.txt
-
-# Set the default command to run your application
-CMD ["python", "app.py"]
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--port", "8000", "--host", "0.0.0.0"]
