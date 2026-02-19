@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/proxy/capitolai/api/:path*",
+      "destination": "http://a84ad3d96ebf043a6b373e3f602c58e3-1294768814.us-east-1.elb.amazonaws.com/api/:path*"
+    },
+    {
+      "source": "/proxy/platform/:path*",
+      "destination": "https://platform-api-development.capitol.ai/:path*"
+    }
+  ]
+}
