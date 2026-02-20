@@ -174,7 +174,7 @@ def add_custom_headers(original_content_type=None, incoming_headers=None):
 async def forward_story(payload: StoryPayload):
     headers = add_custom_headers()  # Add custom headers
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             url=FORWARD_URL,
             json=payload.dict(),  # Forward the request payload as JSON
@@ -252,7 +252,7 @@ async def catch_all(request: Request, path: str):
             logging.error(f"Timestamp: {timestamp} Stack ID: {stack_id} Error injecting source documents: {e}")
             # Continue with original body if there's an error
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.request(
             method=request.method,
             url=f"{forward_url}?{query_params}",
